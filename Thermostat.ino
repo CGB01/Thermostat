@@ -6,13 +6,14 @@
 //
 // Programming level required:  Advanced
 //
-// Supported boards: Adafruit Feather ESP32, DOIT ESP32 DevKit, Heltec WiFi
+// Supported boards: Adafruit Feather ESP32, DOIT ESP32 DevKit, Heltec WiFi, Wemos Lolin32
 // Code will need to be modified for other board types.
 //
 // NOTE:  I have modified Adafruit's libraries and they are included in this distribution.
 //        The reason for this is mainly that Adafruit's display libraries have not yet been
 //        updated to support the ESP32 boards.  You get compiler errors and some functions just
 //        don't work anymore.  I'm sure they will get around to fixing them...
+//
 //        Also the Adafruit IO libraries.  Mainly the ->exist() and ->create() functions do not 
 //        work and you had to hard code your WiFi network name / password along with your 
 //        user name / API key.  The changes I have brought to the libraries are backwards
@@ -23,18 +24,29 @@
 // Code Revision History:
 //
 // MM-DD-YYYY---Version---Description--------------------------------------------------------
-// 12-10-2017   v1.0.1    Start of project and initial code
-// 12-17-2017   v1.0.2    Added code to get NTP server time
-//                        Added code to broadcast over UPD the device name to see if another
-//                        device has already that location name defined.
-//                        Added dweet.io device name in AP configuration with hyperlink to it.
-//                        Added display of RSSI signal level
-// 12-23-2017   v1.0.3    Added code to display the Arduino Logo at start up.
-//                        Finished code for dweet.io and Google home interface.
-//                        Finished NTP time server code
-// 12-25-2017   v1.0.4    Code cleanup and some additional error checking added.
-//                        Also figured out how to reuse the TCP connection while posting to dweet.io (makes for faster post to dweet.io)
-// 12-26-2017   v1.0.5    Started working on code for Heltec WiFi module
+// 31-03-2018   v0.0.14   Added option to clear statistics and schedule in AP_Config()
+//                        This is to allow changing of WiFi network without clearing
+//                        historical data and schedule.
+// 02-27-2018   v0.0.13   Code published to GitHub.
+// 02-24-2018             Added code to create Adafruit "Home Heating" dashboard.
+// 02-13-2018             Added code to broadcast schedule to all thermostats in network.
+// 02-12-2018   v0.0.12   Finished scheduling page and supporting code to run schedule.
+// 02-02-2018   v0.0.11   Finished statistical graphs.
+//                        Modified Adafruit_IO libraries to be able to use configuration data instead of hard coding
+//                        username and API key in the initial call to define the objects.
+// 01-23-2018   v0.0.10   Added support for SH1106 OLED display.  These displays are 128x64 pixels so had to adjust
+//                        several functions to accommodate.
+// 01-20-2018   v0.0.9    Added https://io.adafruit.com connection to receive Google Home commands for thermostats.
+//                        I've added this to prevent malicious hackers from posting to the Google dweet feed to
+//                        change your thermostat setting.  If you don't specify an Adafruit Username/API Key in the initial
+//                        setup, it will use dweet.io as the place to look for new Google Home commands.
+// 01-09-2018   v0.0.8    Code cleanup and support for Celcius or Farenheit
+//                        Added code for MASTER device support (this enables only one IFTTT script for all devices in network)
+//                        Added web server service for configuration and reporting.
+//                        Started working on graphs that are generated on the fly by https://livegap.com/
+// 01-08-2018   v0.0.7    Changed when the thermostat goes on to 0.5 degrees below requested temp
+// 01-07-2018   v0.0.6    Fixed bug where it was flooding dweet.io with post
+// 12-26-2017   v0.0.5    Started working on code for Heltec WiFi module
 //                        Added UpTime to dweet feed
 //                        Added calculation of heating cost.  Needed to add new fields in the Config record,
 //                        Heater size in watts, kWh cost in cents and total time the heater has been on.
@@ -43,28 +55,16 @@
 //                        Completed support for DOIT ESP32 DevKit V1
 //                        Added on some end case faults discovered with the DOIT ESP32 board specifically
 //                        in the handling of WiFi functions.
-// 01-07-2018   v1.0.6    Fixed bug where it was flooding dweet.io with post
-// 01-07-2018   v1.0.7    Changed when the thermostat goes on to 0.5 degrees below requested temp
-// 01-09-2018   v1.0.8    Code cleanup and support for Celcius or Farenheit
-//                        Added code for MASTER device support (this enables only one IFTTT script for all devices in network)
-//                        Added web server service for configuration and reporting.
-//                        Started working on graphs that are generated on the fly by https://livegap.com/
-// 01-20-2018   v1.0.9    Added https://io.adafruit.com connection to receive Google Home commands for thermostats.
-//                        I've added this to prevent malicious hackers from posting to the Google dweet feed to
-//                        change your thermostat setting.  If you don't specify an Adafruit Username/API Key in the initial
-//                        setup, it will use dweet.io as the place to look for new Google Home commands.
-// 01-23-2018   v1.0.10   Added support for SH1106 OLED display.  These displays are 128x64 pixels so had to adjust
-//                        several functions to accommodate.
-// 02-02-2018   v1.0.11   Finished statistical graphs.
-//                        Modified Adafruit_IO libraries to be able to use configuration data instead of hard coding
-//                        username and API key in the initial call to define the objects.
-//                        Modified the file "pins_arduino.h" for the Heltec boards.  The LED_BUILTIN definition was incorrect.
-//                        They had it defined as pin number 2 when it's really pin number 25.
-// 02-12-2018   v1.0.12   Finished scheduling page and supporting code to run schedule.
-// 02-13-2018             Added code to broadcast schedule to all thermostats in network.
-// 02-24-2018             Added code to create Adafruit "Home Heating" dashboard.
-// 02-27-2018   v1.1.0    Code published to hackers.io 
-//
+// 12-24-2017   v0.0.4    Code cleanup and some additional error checking added.
+// 12-23-2017   v0.0.3    Added code to display the Arduino Logo at start up.
+//                        Finished code for dweet.io and Google home interface.
+//                        Finished NTP time server code
+// 12-17-2017   v0.0.2    Added code to get NTP server time
+//                        Added code to broadcast over UPD the device name to see if another
+//                        device has already that location name defined.
+//                        Added dweet.io device name in AP configuration with hyperlink to it.
+//                        Added display of RSSI signal level
+// 12-10-2017   v0.0.1    Start of project and initial code
 
 //
 // List of valid device types
@@ -80,41 +80,41 @@
 //
 // Define firmware version and device type
 //
-#define FIRMWARE    "v1.1.0"
+#define FIRMWARE    "v0.0.14"
 #define DEVICETYPE  Thermostat
 
 //
-// Define Heltec OLED reset line
+// Define OLED display variables
 //
 #if defined(ARDUINO_Heltec_WIFI_LoRa_32) || defined(ARDUINO_Heltec_WIFI_Kit_32)
-  #define OLED_Display  
-  #define OLED_Reset    16
+  #define OLED_Display
+  #define OLED_ADDR     0x3C  // Define I2C Oled Address
+  #define OLED_Reset    16    // Heltec OLED reset pin
 #else
-  //
-  // Uncomment next two lines if you are using an I2C OLED display, otherwise you are using a Nokia 5110 display
-  //
+  // Uncomment next three lines if you are using an I2C OLED display.
+  // Otherwise you are using a Nokia 5110 display
   #define OLED_Display  
-  #define OLED_Reset      -1    // Define the reset pin used for OLED module (If there is none, set to -1)
+  #define OLED_ADDR     0x3C  // Define I2C Oled Address
+  #define OLED_Reset    -1    // Define the reset pin used for OLED module (If there is none, set to -1)
 #endif
 
 //
 // Needed include files
 //
-#include <rom/rtc.h>
 #include <EEPROM.h>
 #include <ESPmDNS.h>
 #include <HTTPClient.h>
 #include <ArduinoOTA.h>
-#include <AdafruitIO_WiFi.h>        // Modified Adafruit ilbrary.  Repository: https://github.com/CGB01/Adadruit_IO
-#include "DHT.h"                    // Modified Adafruit library
-#include <TimeLib.h>                // Repository: https://github.com/PaulStoffregen/Time
-#include <Button.h>                 // Repository: https://github.com/JChristensen/Button/downloads
+#include <AdafruitIO_WiFi.h>          // Modified Adafruit ilbrary.  Repository: https://github.com/CGB01/Adadruit_IO
+#include "DHT.h"                      // Modified Adafruit library
+#include <TimeLib.h>                  // Repository: https://github.com/PaulStoffregen/Time
+#include <Timezone.h>                 // Repository: https://github.com/JChristensen/Timezone
 #include <Adafruit_GFX.h>
 #ifdef OLED_Display
   #if defined(ARDUINO_Heltec_WIFI_LoRa_32) || defined(ARDUINO_Heltec_WIFI_Kit_32)
-    #include "Adafruit_SSD1306.h"   // Modified Adafruit library
+    #include "Adafruit_SSD1306.h"     // Modified Adafruit library
   #else
-    #include "Adafruit_SH1106.h"    // Modified Adafruit library
+    #include "Adafruit_SH1106.h"      // Modified Adafruit library
   #endif
   #include "WiFi_Logo.h"
   #include "Arduino_Logo.h"
@@ -123,8 +123,91 @@
   #define BLACK 1
   #define WHITE 0
 #else  
-  #include "Adafruit_PCD8544.h"     // Modified Adafruit library
+  #include "Adafruit_PCD8544.h"       // Modified Adafruit library
 #endif
+
+//
+// Define PINs used by sketch.  I have mapped the pins so that it uses the same GPIO pins from
+// one board to another (as much as possible!).
+//
+#ifdef ARDUINO_FEATHER_ESP32
+// I2C SDA = GPIO 23, SCL = GPIO 22
+  #define VBATPIN       A13   // GPIO 35
+  #define DHTPIN        A10   // GPIO 27
+  #define RelayPIN      A1    // GPIO 25
+#ifndef OLED_Display  
+  #define BackLight     A0    // GPIO 26
+#endif  
+  #define DC            A8    // GPIO 15
+  #define CS            A7    // GPIO 32
+  #define RST           A6    // GPIO 14
+#endif  
+#ifdef ARDUINO_ESP32_DEV
+// I2C SDA = GPIO 11, SCL = GPIO 22
+  #define DHTPIN        A17   // GPIO 27
+  #define RelayPIN      A18   // GPIO 25
+#ifndef OLED_Display  
+  #define BackLight     A19   // GPIO 26
+#endif  
+  #define DC            A13   // GPIO 15
+  #define CS            A4    // GPIO 32
+  #define RST           A16   // GPIO 14
+  #define SPI_CLK       SCK   // GPIO 18
+  #define SPI_MOSI      MOSI  // GPIO 23      
+#endif  
+#ifdef ARDUINO_LOLIN32
+// I2C SDA = GPIO 21, SCL = GPIO 22
+  #define DHTPIN        A17   // GPIO 27
+  #define RelayPIN      A18   // GPIO 25
+#ifndef OLED_Display  
+  #define BackLight     A19   // GPIO 26
+#endif  
+  #define DC            A13   // GPIO 15
+  #define CS            A4    // GPIO 32
+  #define RST           A16   // GPIO 14
+  #define SPI_CLK       SCK   // GPIO 18
+  #define SPI_MOSI      MOSI  // GPIO 23      
+#endif  
+#ifdef ARDUINO_Heltec_WIFI_LoRa_32
+// I2C SDA = GPIO 4, SCL = GPIO 15 (For OLED display)
+  #define DHTPIN        A14   // GPIO 13
+  #define RelayPIN      A18   // GPIO 25
+#endif
+#ifdef ARDUINO_Heltec_WIFI_Kit_32
+// I2C SDA = GPIO 4, SCL = GPIO 15 (For OLED display)
+  #define DHTPIN        A14   // GPIO 13
+  #define RelayPIN      A18   // GPIO 25
+#endif  
+#ifndef DHTPIN
+  #error Unsupported Board Type!
+#endif
+
+//
+// Define what turns on/off the LED_BUILTIN.
+// Some (stupid) boards need a LOW level to turn it on!
+//
+#ifdef BUILTIN_LED
+  #ifdef ARDUINO_LOLIN32
+    #define LED_ON    LOW
+    #define LED_OFF   HIGH
+  #else
+    #define LED_ON    HIGH
+    #define LED_OFF   LOW
+  #endif
+#endif
+
+// 
+// Define OTA hostname/password and Dweet name
+//
+#define OTA_PASS      "admin"                   // Define your own password for updates
+char HOSTNAME[32]     = "Termo-location-OTA";   // 'location' will change to whatever the device location is
+char DWEETNAME[32]    = "Thermo-eFusedMac";     // This will change to Thermo-'FusedMacAddress'
+
+// 
+// Define what signal level turns ON and OFF the thermostat relay
+//
+#define RelayON       HIGH
+#define RelayOFF      LOW
 
 //
 // Define temperature min/max values allowed
@@ -134,71 +217,6 @@
 #define MinFarenheit  41
 #define MaxFarenheit  86
 
-// 
-// Define OTA hostname/password and Dweet name
-//
-#define OTA_PASS    "admin"                   // Define your own password for updates
-char HOSTNAME[32]   = "Termo-location-OTA";   // 'location' will change to whatever the device location is
-char DWEETNAME[32]  = "Thermo-eFusedMac";     // This will change to Thermo-'FusedMacAddress'
-
-//
-// Define PINs used by sketch.  I have mapped the pins so that it uses the same GPIO pins from
-// one board to another (as much as possible!).
-//
-#ifdef ARDUINO_FEATHER_ESP32
-// I2C SDA = GPIO 23, SCL = GPIO 22
-  #define DEVICE        "Adafruit Feather ESP32"
-  #define VBATPIN       A13   // GPIO 35
-  #define DHTPIN        A10   // GPIO 27
-  #define RelayPIN      A1    // GPIO 25
-  #define BackLight     A0    // GPIO 26
-  #define UpPIN         A11   // GPIO 12
-  #define DownPIN       A5    // GPIO 33
-  #define DC            A8    // GPIO 15
-  #define CS            A7    // GPIO 32
-  #define RST           A6    // GPIO 14
-#elif ARDUINO_DOIT_ESP32_DEVKIT
-// I2C SDA = GPIO 11, SCL = GPIO 22
-  #define DEVICE        "DOIT ESP32 Dev Kit"
-  #define OLED_ADDR     0x3C
-  #define DHTPIN        A17   // GPIO 27
-  #define RelayPIN      A18   // GPIO 25
-  #define BackLight     A19   // GPIO 26
-  #define UpPIN         A15   // GPIO 12
-  #define DownPIN       A5    // GPIO 33
-  #define DC            A13   // GPIO 15
-  #define CS            A4    // GPIO 32
-  #define RST           A16   // GPIO 14
-  #define SPI_CLK       SCK   // GPIO 18
-  #define SPI_MOSI      MOSI  // GPIO 23      
-#elif ARDUINO_Heltec_WIFI_LoRa_32 || ARDUINO_Heltec_WIFI_Kit_32
-#ifdef ARDUINO_Heltec_WIFI_LoRa_32
-  #define DEVICE        "Heltec WiFi+LoRa ESP32"
-#else
-  #define DEVICE        "Heltec WiFi ESP32"
-#endif  
-// I2C SDA = GPIO 4, SCL = GPIO 15
-  #define OLED_ADDR     0x3C
-  #define DHTPIN        A14   // GPIO 13
-  #define RelayPIN      A18   // GPIO 25
-  #define BackLight     A19   // GPIO 26
-  #define UpPIN         A15   // GPIO 12
-  #define DownPIN       A5    // GPIO 33
-  #define DC            A13   // GPIO 15
-  #define CS            A4    // GPIO 32
-  #define RST           A16   // GPIO 14
-  #define SPI_CLK       SCK   // GPIO 5
-  #define SPI_MOSI      MOSI  // GPIO 27
-#else
-  #error Unsupported Board Type!
-#endif
-
-// 
-// Define what signal level turns ON and OFF the thermostat relay
-//
-#define RelayON       HIGH
-#define RelayOFF      LOW
-
 //
 // Define time constants (values are in millseconds)
 //
@@ -207,9 +225,8 @@ char DWEETNAME[32]  = "Thermo-eFusedMac";     // This will change to Thermo-'Fus
 #define OneHour       3600000         // One hour
 #define OneDay        86400000        // One day
 #define DisplayDelay  10000           // Delay before turning off the display backlight (PCD8544 only)
-#define SensorDelay   10000           // Delay before reading the temperature sensor
-#define LongPress     1000            // Long press delay
-#define LongWait      200             // Delay time for button long press
+#define SensorDelay   15000           // Delay before reading the temperature sensor
+#define DweetDelay    15000           // Delay between post to Dweet.io
 
 //
 // Define data structures stored in EEPROM memory
@@ -221,9 +238,9 @@ struct CONFIG
   unsigned int      Init;             // Set to DEVICETYPE if valid data in structure
   float             MinTemp;          // Trigger temperature
   bool              Celcius;          // TRUE is using celcius, FALSE when using Farenheit
-  byte              Contrast;         // Display constrast level
+  byte              Contrast;         // Display constrast level for Nokia 5110 display
   byte              DeviceLocation;   // Device location
-  char              CommonName[32];   // Google Home location name (instead of "Bedroom 1" I would speak "Mary's room")
+  char              CommonName[32];   // Google Home location name (instead of "Bedroom 1" I could speak "Mary's room")
   float             kWh_Cost;         // Electricity cost per kWh in cents
   int               Watts;            // Heater wattage
   unsigned long     HeatingTime;      // Time the heater has been on in seconds
@@ -232,8 +249,6 @@ struct CONFIG
   char              Master[17];       // Master device MAC address (not used if using io.adafruit.com)
   char              IO_USER[32];      // Adafruit IO User Name
   char              IO_KEY[64];       // Adafruit IO Key
-  long              TimeZone;         // Timezone of where device is location
-  byte              DST_On;           // Does Region follow Day Light Savings?
   char              LastUpdated[32];  // Date/Time of last Google Home message received
   byte              SoftReboot;       // Soft reboot count
   byte              RollOver;         // Number of times the millis() counter has rolled back to zero
@@ -247,7 +262,6 @@ struct STAT_ENTRY
 {
   float             Temperature;      // Average temperature for period
   float             Humidity;         // Average humidity for period
-  float             kWh_Used;         // KiloWatts used for period (TODO: Remove field.  Not needed anymore)
   unsigned long     HeatingTime;      // Number of seconds the heater was on for period
   int               Samples;          // Number of samples take for period (set to zero if avg is calculated)
 };
@@ -306,7 +320,7 @@ char Location[][15] = {
   "Bathroom 2",
   "Bathroom 3",
   "Office",
-// Locations below 'Office' are excluded from the keywork "Home" location  
+// Locations below 'Office' are excluded from the keyword "Home" location  
   "Basement",
   "Cantina",
   "Wine Cellar",
@@ -344,7 +358,7 @@ enum CHARTS
 //
 // Create display object
 // NOTE:  The software SPI does *NOT* work with the ESP32 module and Adafruit_PCD8544 library.
-// Only use hardware...
+//        Only use hardware...
 //
 #ifdef OLED_Display
   #if defined(ARDUINO_Heltec_WIFI_LoRa_32) || defined(ARDUINO_Heltec_WIFI_Kit_32)
@@ -357,19 +371,25 @@ enum CHARTS
 #endif
 
 //
-// Create temperature sensor, webserver object and buttons
+// Create temperature sensor, HTTPClient and webserver objects
 //
-DHT             dht(DHTPIN, DHT11);
-WiFiServer      WebServer(80);
-HTTPClient      http;
-Button          UpKey(UpPIN);
-Button          DownKey(DownPIN);
+DHT               dht(DHTPIN, DHT11);
+WiFiServer        WebServer(80);
+HTTPClient        http;
 
 //
-// Set up the Adafruit IO
+// Eastern Time Zone rule (this will need to be changed for other time zones and daylight savings rules)
+//
+TimeChangeRule myEDT = {"EDT", Second, Sun, Mar, 2, -240};  // Eastern Daylight Time = UTC - 4 hours
+TimeChangeRule myEST = {"EST", First, Sun, Nov, 2, -300};   // Eastern Standard Time = UTC - 5 hours
+Timezone myTZ(myEDT, myEST);
+
+//
+// Set up the Adafruit IO objects
 //
 AdafruitIO_WiFi io("", "", "", "");                             // Modified Adafruit library
 AdafruitIO_Feed *GoogleHome = io.feed("MASTER", false);         // Modified Adafruit library
+AdafruitIO_Feed *IO_Schedule = io.feed("Schedule", false);      // Modified Adafruit library
 AdafruitIO_Feed *IO_Location = io.feed("", false);              // Modified Adafruit library
 
 //
@@ -379,7 +399,7 @@ bool            WiFiConnected, LostWiFi, HeatOn, SensorError, DweetFailed, OTA_U
 float           temperature, humidity, RequestedTemp, Last_T, Last_H;
 char            googleText[20];
 int             MaxLocations, ExcludeLocation, LastHour, LastDay, LastMonth, MDNS_Services;
-unsigned long   CurrentTime, DisplayTime, TempReading, HeatOnTime, HourlyHeatOnTime, DweetTime, DweetDelay, DataSave;
+unsigned long   CurrentTime, DisplayTime, TempReading, HeatOnTime, HourlyHeatOnTime, DweetTime, DataSave;
 CONFIG          Config;
 STATS           HeatingStats;
 WEEK_SCHEDULE   Schedule;
@@ -391,7 +411,7 @@ void setup()
 {
   char  Time[32];
   int   chk, Cntr;
-  bool  Done;
+  bool  Done, InitFlag;
   
   // Start by saving MaxLocations and DWEET name (used during first time configuration)
   MaxLocations = sizeof(Location) / 15;
@@ -403,39 +423,25 @@ void setup()
   pinMode(RelayPIN, OUTPUT);
   digitalWrite(RelayPIN, RelayOFF);
 
-#ifndef OLED_Display
+#ifdef BackLight
   pinMode(BackLight, OUTPUT);
   digitalWrite(BackLight, HIGH);
 #endif
 
 #ifdef BUILTIN_LED
   pinMode(LED_BUILTIN, OUTPUT);
-  digitalWrite(LED_BUILTIN, HIGH);
+  digitalWrite(LED_BUILTIN, LED_ON);
 #endif  
 
   // Display board name and firmware version
   Serial.begin(115200);
   while(!Serial);
-  Serial.println();
-  for(Cntr = 0; Cntr < 50; Cntr++) Serial.print("-");
-  Serial.println();
-
-  // Display reset reason and memory needed in EEPROM.  More for debugging than anything else...
-  Serial.print("CPU0 reset reason: ");
-  print_reset_reason(rtc_get_reset_reason(0));
-  Serial.print("CPU1 reset reason: ");
-  print_reset_reason(rtc_get_reset_reason(1));
-/*
-  Serial.printf("Size of Config       = %d bytes\n", sizeof(Config));
-  Serial.printf("Size of HeatingStats = %d bytes\n", sizeof(HeatingStats));
-  Serial.printf("Size of Schedule     = %d bytes\n", sizeof(Schedule));
-  Serial.printf("Total EEPROM needed  = %d bytes\n", sizeof(Config)+sizeof(HeatingStats)+sizeof(Schedule));
-*/
+  delay(1000);
 
   // Ok, let's start...
   for(Cntr = 0; Cntr < 50; Cntr++) Serial.print("-");
-  Serial.println("\nGoogle Home / Alexa WiFi Thermostat");
-  Serial.printf("Running on %s / Firmware %s\n", DEVICE, FIRMWARE);
+  Serial.println("\nGoogle Home / Alexa Enabled WiFi Thermostat");
+  Serial.printf("Running on %s / Firmware %s\n", ARDUINO_VARIANT, FIRMWARE);
 
   // Initialize EEPROM memory
   if(!EEPROM.begin(sizeof(Config)+sizeof(HeatingStats)+sizeof(Schedule)))
@@ -449,7 +455,9 @@ void setup()
   EEPROM.get(CONFIG_OFFSET, Config);
   EEPROM.get(STATS_OFFSET, HeatingStats);
   EEPROM.get(SCHEDULE_OFFSET, Schedule);
-
+  InitFlag = (Config.Init == DEVICETYPE && Config.CRC == Calc_CRC());
+  
+  // Initialize display object
 #ifdef OLED_Display
   #if defined(ARDUINO_Heltec_WIFI_LoRa_32) || defined(ARDUINO_Heltec_WIFI_Kit_32)
     display.begin(SSD1306_SWITCHCAPVCC, OLED_ADDR);
@@ -463,10 +471,8 @@ void setup()
   // Lower clock divider gives faster updates on the LCD
   #define PCD8544_SPI_CLOCK_DIV SPI_CLOCK_DIV16
   display.begin();
-  display.setContrast((Config.Init == DEVICETYPE && Config.CRC == Calc_CRC()) ? Config.Contrast : 60);
+  display.setContrast(InitFlag ? Config.Contrast : 60);
 #endif
-
-  // Display Arduino logo
   ArduinoLogo(3000);
 
   // Read sensor until valid data is returned
@@ -491,7 +497,7 @@ void setup()
       Serial.print(".");
       display.print(".");
       display.display();
-      if(Config.Init == DEVICETYPE && Config.CRC == Calc_CRC()) 
+      if(InitFlag)
         temperature = dht.readTemperature(!Config.Celcius);
       else
         temperature = dht.readTemperature();
@@ -508,7 +514,7 @@ void setup()
       Done = true;
       Serial.print("  OK!\n\nTemperature   = "); 
       Serial.print(temperature, 1);
-      if(Config.Init == DEVICETYPE && Config.CRC == Calc_CRC()) 
+      if(InitFlag)
         Serial.printf(" %c\n", Config.Celcius ? 'C' : 'F');
       else
         Serial.println("C");
@@ -517,7 +523,7 @@ void setup()
     else
     {
       // Failed to read temperature sensor.
-      Serial.println("  Failed!");
+      Serial.println("  Failed!\nCheck wiring...  Program halting.");
       display.clearDisplay();
       display.setCursor(0, 0);
       display.setTextColor(WHITE, BLACK);
@@ -529,12 +535,18 @@ void setup()
       display.println(FormatText("Check wiring...", CENTER));
       display.println();
       display.display();
-      while(1);
+      while(1)
+      {
+#ifdef BUILTIN_LED
+        digitalWrite(LED_BUILTIN, LED_ON); delay(250);
+        digitalWrite(LED_BUILTIN, LED_OFF); delay(250);   
+#endif
+      }
     }
   }
   
   // If Init flag is not DEVICETYPE or CRC values doesn't match, then run first time init process
-  if(Config.Init != DEVICETYPE || Config.SoftReboot > 5 || Config.CRC != Calc_CRC()) AP_Config();    
+  if(Config.Init != DEVICETYPE || Config.SoftReboot >= 3 || Config.CRC != Calc_CRC()) AP_Config();    
 
   // Display heater size, kWh used, running cost
   CurrentTime = 0;
@@ -564,12 +576,6 @@ void setup()
   EEPROM.put(CONFIG_OFFSET, Config);
   EEPROM.commit();
 
-  // Set the DweetDelay value (short delay if getting Google Home messages from dweet.io)
-  if(strlen(Config.IO_USER) != 0 && strlen(Config.IO_KEY) != 0)
-    DweetDelay = 15 * OneSecond;   // Don't need to scan/post to dweet as often to get Google Home messages
-  else 
-    DweetDelay = 5 * OneSecond;    // Set to 5 second delay to scan/post to dweet.io (Google Home messages come here)
-    
   // Display connection info
   Serial.print("MAC Address = ");
   Serial.println(WiFi.macAddress());
@@ -581,20 +587,18 @@ void setup()
     
   // Get time from NTP server
   Serial.print("Getting time from NTP server... ");
-  Serial.println(getNTPTime() ? "OK!" : "Failed!");
+  setSyncProvider(getNTPTime);
+  setSyncInterval(OneHour);
+  Serial.println((timeStatus() == timeSet) ? "OK!" : "Failed!");
 
   // Now setup OTA information
   Serial.printf("\nHostname name is %s\n", HOSTNAME);
   Serial.printf("dweet.io name is %s\n", DWEETNAME);
   InitOTA();
 
-  // Print my Common name if I have one defined 
+  // Print my Common Name if I have one defined 
   if(strlen(Config.CommonName) != 0) Serial.printf("Location '%s' has a common name of \"%s\"\n", Location[Config.DeviceLocation], Config.CommonName);
   
-  // Do initial read of button states
-  UpKey.read();
-  DownKey.read();
-
   // Default global variables and display initial temperature reading
   OTA_Update = HeatOn = SensorError = DweetFailed = LostWiFi = false;
   strcpy(googleText, "");
@@ -603,13 +607,10 @@ void setup()
 
   // Set RequestedTemp to either Config.MinTemp or if there's a schedule (and it's enabled), to the scheduled temperature
   Serial.printf("Scheduling is %sabled.\n", (Schedule.Enabled ? "en" : "dis"));
-  if(Schedule.Enabled)
-    RequestedTemp = ScheduledTemp();
-  else
-    RequestedTemp = Config.MinTemp;
+  RequestedTemp = ScheduledTemp(Config.MinTemp);
   strcpy(googleText, "");
   Serial.printf("Temperature will be set to %s %c\n", String(RequestedTemp, 1).c_str(), (Config.Celcius ? 'C' : 'F')); 
-  
+      
   // Start WebServer
   Serial.println("Starting web service.");
   WebServer.begin();
@@ -622,7 +623,7 @@ void setup()
 
   // Init done, run program
 #ifdef BUILTIN_LED
-  digitalWrite(LED_BUILTIN, LOW);
+  digitalWrite(LED_BUILTIN, LED_OFF);
 #endif  
   Serial.printf("\n%s %s\nRunning program...\n", getDate(false), getTime(false));
   for(Cntr = 0; Cntr < 50; Cntr++) Serial.print("-");
@@ -673,34 +674,23 @@ void loop()
   if(OTA_Update) return;
   if(strlen(Config.IO_USER) != 0 && strlen(Config.IO_KEY) != 0) io.run();
   
-  // Read button states
-  UpKey.read();
-  DownKey.read();
-
-  // If the UP or DOWN key were pressed, go set min temperature
-  if(UpKey.wasReleased() || DownKey.wasReleased()) SetMinTemp(RequestedTemp);
-    
   // Check if I have a client connecting to web server
   ProcessClient();
   
   // Time to turn off the backlight?
-#ifndef OLED_Display
+#ifdef BackLight
   if(CurrentTime - DisplayTime >= DisplayDelay) digitalWrite(BackLight, LOW);
 #endif
 
   // If scheduling is enabled, check if it's time to change temperature
-  if(Schedule.Enabled && (minute() % 15 == 0) && second() == 0) 
+  if(Schedule.Enabled)
   {
-    temp = ScheduledTemp();
+    temp = ScheduledTemp(Config.MinTemp);
     if(temp != RequestedTemp)
     {
       Serial.printf("[%s] Scheduled temperature now set to %s %c\n", getTime(false), String(temp, 1).c_str(), (Config.Celcius ? 'C' : 'F'));
       sprintf(googleText, "Time = %s", String(temp, 1).c_str());
       RequestedTemp = temp;
-    
-      // Post to Adafruit new MASTER temp.  Here I'm assuming all thermostats are running the same schedule
-      // If this is not the case for your environment, comment out the next line
-      if(strlen(Config.IO_USER) != 0 && strlen(Config.IO_KEY) != 0) GoogleHome->save(RequestedTemp);
     }
   }
   
@@ -831,6 +821,8 @@ void  WiFiConnect(void)
     GoogleHome->onMessage(GoogleCommand);    
     IO_Location->init(Location[Config.DeviceLocation]); // Modified Adafruit library
     IO_Location->onMessage(IOCommand);    
+    IO_Schedule->init();                                // Modified Adafruit library
+    IO_Schedule->onMessage(IOSchedule);
     io.connect(Config.WiFi_SSID, Config.WiFi_PASS);     // Modified Adafruit library
   }
   while(!WiFiConnected)
@@ -917,7 +909,8 @@ void  WiFiConnect(void)
         AdafruitIO_Dashboard *dashboard = io.dashboard("Home Heating");
         SliderBlock *slider = dashboard->addSliderBlock(GoogleHome);
         GaugeBlock *gauge = dashboard->addGaugeBlock(IO_Location);
-  
+        ToggleBlock *toggle = dashboard->addToggleBlock(IO_Schedule);
+
         // Check if the Adafruit MASTER feed already exits
         Serial.println(io.userAgent());
         if(!GoogleHome->exists()) 
@@ -926,6 +919,13 @@ void  WiFiConnect(void)
           if(!GoogleHome->create()) Serial.println("Failed!"); else Serial.println("OK!");
         }      
 
+        // Check if the Schedule feed exists
+        if(!IO_Schedule->exists()) 
+        {
+          Serial.print("Creating Adafruit Schedule feed...  ");        
+          if(!IO_Schedule->create()) Serial.println("Failed!"); else Serial.println("OK!");
+        }      
+        
         // Check if the Adafruit location feed already exits
         if(!IO_Location->exists()) 
         {
@@ -945,6 +945,12 @@ void  WiFiConnect(void)
             slider->step = 0.50F;
             slider->label = (Config.Celcius ? "Celcius" : "Farenheit");
             bool added = slider->save("MASTER");
+            Serial.println(added ? "OK!" : "Failed!");
+
+            Serial.print("Creating Schedule switch...");
+            toggle->onText = "ON";
+            toggle->offText = "OFF";
+            added = toggle->save("Schedule");
             Serial.println(added ? "OK!" : "Failed!");
 
             Serial.printf("Creating \"%s\" gauge... ", Location[Config.DeviceLocation]);
@@ -988,7 +994,7 @@ void  InitOTA(void)
   { 
     OTA_Update = true;
     WebServer.stop();
-#ifndef OLED_Display
+#ifdef BackLight
     digitalWrite(BackLight, HIGH);      // Turn backlight on
 #endif
     digitalWrite(RelayPIN, RelayOFF);   // Turn heater off during updates
@@ -1095,82 +1101,6 @@ void  InitOTA(void)
     ESP.restart();
   });
   ArduinoOTA.begin();  
-}
-
-//
-// Set minimum room temperature
-//
-void SetMinTemp(float Temp)
-{
-  bool LCD_Update = true;
-  float O_Temp = Temp;
-  char buf[20];
-  unsigned long MenuTime;
-    
-  // Go into a loop waiting for a button press or a time out
-  MenuTime = millis();
-  while(millis() - MenuTime < 5 * OneSecond)
-  {
-    // Read button states
-    UpKey.read();
-    DownKey.read();
-
-    // Was the Up for Down button pressed?
-    if(UpKey.wasReleased() || UpKey.pressedFor(LongPress))
-    {
-      LCD_Update = true;
-      Temp += 0.1;
-      if(Temp > (Config.Celcius ? MaxCelcius : MaxFarenheit)) Temp = Config.Celcius ? MinCelcius : MinFarenheit;
-    }
-    if(DownKey.wasReleased() || DownKey.pressedFor(LongPress))
-    {
-      LCD_Update = true;
-      Temp -= 0.1;
-      if(Temp < (Config.Celcius ? MinCelcius : MinFarenheit)) Temp = Config.Celcius ? MaxCelcius : MaxFarenheit;
-    }
-
-    // Slow down updates if this is a button long press
-    if(UpKey.pressedFor(LongPress) || DownKey.pressedFor(LongPress)) delay(LongWait);
-    
-    // Do I need to update the display?
-    if(LCD_Update)
-    {
-      display.clearDisplay();
-      display.setTextSize(1);
-      display.setCursor(0, 0);
-      display.setTextColor(WHITE, BLACK);
-      display.println(FormatText("Set Min Temp", CENTER));
-      display.setTextColor(BLACK);
-      display.println();
-#ifdef OLED_Display
-      display.println();
-      display.print(" ");
-      display.setTextSize(3);
-#else    
-      display.print(" ");
-      display.setTextSize(2);
-#endif      
-      display.print(" ");
-      display.print(Temp, 1);
-      display.setTextSize(1);
-      sprintf(buf, " %c ", Config.Celcius ? 'C' : 'F');
-      display.println(buf);
-      display.display();
-      LCD_Update = false;
-      MenuTime = millis();
-    }
-  };
-
-  // If temperature has not changed, just exit
-  if(O_Temp == Temp) return;
-  
-  // Disable scheduling and update new min temp to EEPROM memory
-  RequestedTemp = Config.MinTemp = Temp;
-  Config.CRC = Calc_CRC();                        
-  EEPROM.put(CONFIG_OFFSET, Config);
-  Schedule.Enabled = false;
-  EEPROM.put(SCHEDULE_OFFSET, Schedule);
-  EEPROM.commit();
 }
 
 //
@@ -1327,8 +1257,12 @@ char *getTime(bool Short)
   
   // Check if I have the time set
   if(timeStatus() != timeSet) 
+  {
+    Serial.println("[getTime] TimeStatus() not set!");
     if(!getNTPTime()) return Buffer;    // Unable to get time from NTP server
+  }
 
+  // Return short or long time format
   if(Short)
     sprintf(Buffer, "%02d:%02d", hour(), minute());
   else
@@ -1411,6 +1345,7 @@ void AP_Config(void)
   bool    Post = false;
   bool    Icon = false;
   bool    Reboot = false;
+  bool    ClearStats = true;
   int     Count;
   int     Pos, Cntr, net, i;
   char    buf[32];
@@ -1459,8 +1394,8 @@ void AP_Config(void)
     for(i=0; i<2; i++) 
     {
       // This is just to visualize that I'm waiting for a client to connect
-      digitalWrite(LED_BUILTIN, HIGH); delay(100); 
-      digitalWrite(LED_BUILTIN, LOW); delay(100);
+      digitalWrite(LED_BUILTIN, LED_ON); delay(100); 
+      digitalWrite(LED_BUILTIN, LED_OFF); delay(100);
     }
 #endif    
     delay(1000);
@@ -1468,8 +1403,9 @@ void AP_Config(void)
     if(client) 
     {
       // We have a new client!
+      ClearStats = (Config.Init == DEVICETYPE && Config.CRC == Calc_CRC());
 #ifdef BUILTIN_LED
-      digitalWrite(LED_BUILTIN, HIGH);
+      digitalWrite(LED_BUILTIN, LED_ON);
 #endif    
       
       String currentLine = "";
@@ -1498,7 +1434,7 @@ void AP_Config(void)
               // Send HTML page with the configuration info
               client.print("<!DOCTYPE html><html><head><title>Thermostat Setup</title>");
               client.printf("</head><body><center><H1><U>Thermostat Configuration</U></H1><H3><font color=\"#FF0000\">Device = %s<font color=\"#000000\">", FusedMAC());
-              client.printf("</H3>%s / Firmware %s", DEVICE, FIRMWARE);
+              client.printf("</H3>%s / Firmware %s", ARDUINO_VARIANT, FIRMWARE);
               client.printf("<br>Temperature = %s C, Humidity = %s%%<br><br>", String(temperature, 1).c_str(), String(humidity, 0).c_str());
 
               // If this was a POST continue reading to get parameters sent back
@@ -1507,35 +1443,38 @@ void AP_Config(void)
                 // Break down POST into components
                 memset(&Config, NULL, sizeof(Config));
                 Msg = client.readStringUntil('\n');
+//Serial.println(Msg);
                 Pos = Msg.indexOf("SSID=");
                 if(Pos != -1) value = Msg.substring(Pos+5, Msg.indexOf("&PASS"));
                 if(value == "") 
                   Post = false;
                 else
                   strcpy(Config.WiFi_SSID, value.c_str());
+//Serial.println(Config.WiFi_SSID);                  
                 Pos = Msg.indexOf("PASS=");
                 if(Pos != -1) value = Msg.substring(Pos+5, Msg.indexOf("&LOC"));
                 strcpy(Config.WiFi_PASS, value.c_str());
+//Serial.println(Config.WiFi_PASS);                  
                 Pos = Msg.indexOf("LOC=");
-                if(Pos != -1) value = Msg.substring(Pos+4, Msg.indexOf("&DEGREES"));
+                if(Pos != -1) value = Msg.substring(Pos+4, Msg.indexOf("&COMMON"));
                 Config.DeviceLocation = value.toInt();
+//Serial.println(Config.DeviceLocation);                  
                 Pos = Msg.indexOf("COMMON=");
-                if(Pos != -1) value = Msg.substring(Pos+7, Msg.indexOf("&TIMEZONE"));
-                if(value.length() != 0) value.replace("+", " ");
+                if(Pos != -1) value = Msg.substring(Pos+7, Msg.indexOf("&DEGREES"));
                 strcpy(Config.CommonName, value.c_str());
+//Serial.println(Config.CommonName);                  
 
-                // Make sure common entered is not defined as a location
+                // Make sure common name entered is not defined as a location
                 for(Pos=0; Pos<MaxLocations; Pos++) if(strcmp(Location[Pos], Config.CommonName) == 0) Post = false;
                 if(!Post) client.print("<center><font color=\"#FF0000\">Common Name can not be a Location Name!<font color=\"#000000\"><br><br>");
-                Pos = Msg.indexOf("TIMEZONE=");
-                if(Pos != -1) value = Msg.substring(Pos+9, Msg.indexOf("&DEGREES"));
-                Config.TimeZone = (unsigned long)(value.toFloat() * 3600);
                 Pos = Msg.indexOf("DEGREES=");
                 if(Pos != -1) value = Msg.substring(Pos+8, Msg.indexOf("&TEMP"));
                 Config.Celcius = value.toInt();
+//Serial.println(Config.Celcius);                  
                 Pos = Msg.indexOf("TEMP=");
                 if(Pos != -1) value = Msg.substring(Pos+5, Msg.indexOf("&WATTS"));
                 Config.MinTemp = value.toFloat();
+//Serial.println(Config.MinTemp);                  
                 if(Config.MinTemp < (Config.Celcius ? 5 : 41) || Config.MinTemp > (Config.Celcius ? 30 : 86))
                 {
                   client.print("<center><font color=\"#FF0000\">Invalid minimum temperature!<font color=\"#000000\"><br>Must be between 5 and 30 for Celcius<br>between 41 and 86 for Farenheit.</center><br><br>");
@@ -1544,19 +1483,32 @@ void AP_Config(void)
                 Pos = Msg.indexOf("WATTS=");
                 if(Pos != -1) value = Msg.substring(Pos+6, Msg.indexOf("&COST"));
                 Config.Watts = value.toFloat();
+//Serial.println(Config.Watts);                  
                 Pos = Msg.indexOf("COST=");
                 if(Pos != -1) value = Msg.substring(Pos+5, Msg.indexOf("&MASTER"));
                 Config.kWh_Cost = value.toFloat();
+//Serial.println(Config.kWh_Cost);                  
                 Pos = Msg.indexOf("MASTER=");
                 if(Pos != -1) value = Msg.substring(Pos+7, Msg.indexOf("&IO_USER"));
                 strcpy(Config.Master, value.c_str());
+//Serial.println(Config.Master);                  
                 Pos = Msg.indexOf("IO_USER=");
                 if(Pos != -1) value = Msg.substring(Pos+8, Msg.indexOf("&IO_KEY"));
                 strcpy(Config.IO_USER, value.c_str());
+//Serial.println(Config.IO_USER);                  
                 Pos = Msg.indexOf("IO_KEY");
                 if(Pos != -1) value = Msg.substring(Pos+7);
+                Pos = value.indexOf("&CLEAR");
+                if(Pos != -1) value = value.substring(0, Pos);
                 strcpy(Config.IO_KEY, value.c_str());
-
+//Serial.println(Config.IO_KEY);    
+                if(ClearStats)
+                {              
+                  Pos = Msg.indexOf("CLEAR=on");
+                  if(Pos != -1) ClearStats = true; else ClearStats = false;
+                } else ClearStats = true;
+//Serial.println(ClearStats);                  
+                
                 // If Post is still TRUE, try to connect to WiFi network
                 if(Post)
                 {
@@ -1588,6 +1540,7 @@ void AP_Config(void)
                       // Location already in use
                       Serial.printf("Location \"%s\" already used!\n", Location[Config.DeviceLocation]);
                       client.printf("Location \"<b>%s</b>\" already in use!</center><br>", Location[Config.DeviceLocation]);
+                      ClearStats = (Config.Init == DEVICETYPE && Config.CRC == Calc_CRC());
                     }   
                     else
                     {
@@ -1602,13 +1555,13 @@ void AP_Config(void)
                         client.print("You will need it when adding new devices.<br>");
                         strcpy(Config.Master, FusedMAC());
                       }
-                      client.print("<br>Now go and create your <a href=\"https://ifttt.com\">IFTTT</a> applet.<br>");
-                      client.printf("<br>Your <b>dweet.io</b> name is <a href=\"https://dweet.io/follow/%s\">%s</a>", DWEETNAME, DWEETNAME);
+                      client.print("<br>Now go and create your <a href=\"https://ifttt.com\" target=\"_blank\">IFTTT</a> applet.<br>");
+                      client.printf("<br>Your <b>dweet.io</b> name is <a href=\"https://dweet.io/follow/%s\" target=\"_blank\">%s</a>", DWEETNAME, DWEETNAME);
                       client.print("<br><br>Device IP address is: <a href=\"http://"); 
                       client.print(WiFi.localIP());
-                      client.print("\">");
+                      client.print("\" target=\"_blank\">");
                       client.print(WiFi.localIP());
-                      client.printf("</a><br><br>Rebooting %s</center></body></html>", DEVICE);
+                      client.printf("</a><br><br>Rebooting %s</center></body></html>", ARDUINO_VARIANT);
                       client.println();
                       client.println();
                       client.flush();
@@ -1619,11 +1572,15 @@ void AP_Config(void)
                       Config.CRC = Calc_CRC();                        
                       EEPROM.put(CONFIG_OFFSET, Config);
 
-                      // Clear HeatingStats and Schedule
-                      memset(&HeatingStats, NULL, sizeof(HeatingStats));
-                      memset(&Schedule, NULL, sizeof(Schedule));
-                      EEPROM.put(STATS_OFFSET, HeatingStats);
-                      EEPROM.put(SCHEDULE_OFFSET, Schedule);
+                      // Do I need to clear HeatingStats and Schedule?
+                      if(ClearStats)
+                      {
+                        Serial.println("Clearing statistics and schedule.");
+                        memset(&HeatingStats, NULL, sizeof(HeatingStats));
+                        memset(&Schedule, NULL, sizeof(Schedule));
+                        EEPROM.put(STATS_OFFSET, HeatingStats);
+                        EEPROM.put(SCHEDULE_OFFSET, Schedule);
+                      }
                       EEPROM.commit();
                       Reboot = true;
                       break;
@@ -1646,40 +1603,6 @@ void AP_Config(void)
               for(i=0; i<MaxLocations; ++i) client.printf("<option value=\"%d\">%s</option>\n", i, Location[i]);
               client.print("</select>\n</td></tr>");
               client.print("<tr><td align=\"right\">Common Name&nbsp</td><td><input type=\"text\" name=\"COMMON\" value=\"\" size=20 placeholder=\"Google Home Name\"></td></tr>");
-              client.print("<tr><td align=\"right\">Timezone&nbsp</td><td>\n<select name=\"TIMEZONE\">");
-              client.println("<option value=\"-12\">(GMT -12:00)</option>");
-              client.println("<option value=\"-11\">(GMT -11:00)</option>");
-              client.println("<option value=\"-10\">(GMT -10:00)</option>");
-              client.println("<option value=\"-9\">(GMT -9:00)</option>");
-              client.println("<option value=\"-8\">(GMT -8:00)</option>");
-              client.println("<option value=\"-7\">(GMT -7:00)</option>");
-              client.println("<option value=\"-6\">(GMT -6:00)</option>");
-              client.println("<option value=\"-5\" selected=\"selected\">(GMT -5:00)</option>");
-              client.println("<option value=\"-4.5\">(GMT -4:30)</option>");
-              client.println("<option value=\"-4\">(GMT -4:00)</option>");
-              client.println("<option value=\"-3.5\">(GMT -3:30)</option>");
-              client.println("<option value=\"-3\">(GMT -3:00)</option>");
-              client.println("<option value=\"-2\">(GMT -2:00)</option>");
-              client.println("<option value=\"-1\">(GMT -1:00)</option>");
-              client.println("<option value=\"0\">(GMT)</option>");
-              client.println("<option value=\"1\">(GMT +1:00)</option>");
-              client.println("<option value=\"2\">(GMT +2:00)</option>");
-              client.println("<option value=\"3\">(GMT +3:00)</option>");
-              client.println("<option value=\"3.5\">(GMT +3:30)</option>");
-              client.println("<option value=\"4\">(GMT +4:00)</option>");
-              client.println("<option value=\"4.5\">(GMT +4:30)</option>");
-              client.println("<option value=\"5\">(GMT +5:00)</option>");
-              client.println("<option value=\"5.5\">(GMT +5:30)</option>");
-              client.println("<option value=\"5.75\">(GMT +5:45)</option>");
-              client.println("<option value=\"6\">(GMT +6:00)</option>");
-              client.println("<option value=\"6.5\">(GMT +6:30)</option>");
-              client.println("<option value=\"7\">(GMT +7:00)</option>");
-              client.println("<option value=\"8\">(GMT +8:00)</option>");
-              client.println("<option value=\"9\">(GMT +9:00)</option>");
-              client.println("<option value=\"9.5\">(GMT +9:30)</option>");
-              client.println("<option value=\"10\">(GMT +10:00)</option>");
-              client.println("<option value=\"11\">(GMT +11:00)</option>");
-              client.println("<option value=\"12\">(GMT +12:00)</option></select>\n");
               client.print("<tr><td align=\"right\">Degrees&nbsp</td><td><input name=\"DEGREES\" type=\"radio\" checked value=\"1\">Celcius&nbsp<input name=\"DEGREES\" type=\"radio\" value=\"0\">Farenheit</td></tr>");
               client.printf("<tr><td align=\"right\">Min Temp&nbsp</td><td><input type=\"number\" name=\"TEMP\" min=\"%d\" max=\"%d\" step=\"0.5\"></td></tr>", MinCelcius, MaxFarenheit);
               client.print("<tr><td align=\"right\">Heater Watts&nbsp</td><td><select name=\"WATTS\">");
@@ -1693,9 +1616,10 @@ void AP_Config(void)
               client.print("<tr><td align=\"right\">kWh Cost&nbsp</td><td><input type=\"number\" name=\"COST\" min=\"0\" max=\"99.9\" step=\"0.1\" value=\"0\">&nbspcents</td></tr>");
               client.print("<tr><td align=\"right\">Master Device&nbsp</td><td><input type=\"text\" name=\"MASTER\" value=\"\" size=16 placeholder=\"Device ID\"></td></tr>");
               client.print("<tr><td align=\"right\">User Name&nbsp</td><td><input type=\"text\" name=\"IO_USER\" value=\"\" placeholder=\"Adafruit User Name\"></td></tr>");
-              client.print("<tr><td align=\"right\">API Key&nbsp</td><td><input type=\"text\" name=\"IO_KEY\" size=32 value=\"\" placeholder=\"Adafruit API Key\"></td></tr>");
-              client.print("</table><br><input type=\"submit\"></form>");
-              client.printf("<br><hr>Created by <a href=\"mailto:claudegbeaudoin@hotmail.com?Subject=Google Thermostat\">Claude G. Beaudoin</a></body></html>");
+              client.print("<tr><td align=\"right\">API Key&nbsp</td><td><input type=\"text\" name=\"IO_KEY\" size=32 value=\"\" placeholder=\"Adafruit API Key\"></td></tr></table>");
+              if(ClearStats) client.printf("<br><input type=\"checkbox\" name=\"CLEAR\"%s>&nbsp&nbspClear statistics and schedule?<br>", (ClearStats ? "" : " checked"));
+              client.print("<br><input type=\"submit\"><br></form>");
+              client.printf("<br><hr>Created by <a href=\"mailto:claudegbeaudoin@hotmail.com?Subject=Google Thermostat\">Claude G. Beaudoin</a></center></body></html>");
               client.println();
               client.println();
               client.flush();
@@ -1711,8 +1635,8 @@ void AP_Config(void)
         
       // Close the connection
       client.flush();
-      client.stop();
       delay(2000);
+      client.stop();
       if(Reboot)
       {
         // Disconnect AP and reboot
@@ -1726,7 +1650,7 @@ void AP_Config(void)
       Icon = Post = false;
     }
 #ifdef BUILTIN_LED
-    digitalWrite(LED_BUILTIN, LOW);
+    digitalWrite(LED_BUILTIN, LED_OFF);
 #endif    
   }
 }
@@ -1745,7 +1669,7 @@ void DweetPost(void)
   if(!WiFiConnected) { DweetTime = millis(); return; }
   
 #ifdef BUILTIN_LED
-  digitalWrite(LED_BUILTIN, HIGH);
+  digitalWrite(LED_BUILTIN, LED_ON);
 #endif  
   DweetFailed = true;
   MyLocation = String(Location[Config.DeviceLocation]);
@@ -1756,6 +1680,7 @@ void DweetPost(void)
   {
     postData = "http://dweet.io/get/latest/dweet/for/Thermo-" + String(Config.Master) + "-Google";
     http.setReuse(true);
+    http.setTimeout(10000);
     http.begin(postData);
     httpCode = http.GET();
     if(httpCode == HTTP_CODE_OK) 
@@ -1774,9 +1699,6 @@ void DweetPost(void)
         if(strcmp(buf, Config.LastUpdated) != 0)
         {
           // Yup, get the new min temp and the destination location
-#ifndef OLED_Display
-          digitalWrite(BackLight, HIGH);
-#endif          
           strcpy(Config.LastUpdated, buf);
           response.toUpperCase();
           i = response.indexOf("LOCATION");
@@ -1799,7 +1721,10 @@ void DweetPost(void)
           {
             // Yup it's for me, is this a MinTemp request?
             // This is in response to a "Ok Google, set $ temperature to # degrees" command
+#ifdef BackLight
+            digitalWrite(BackLight, HIGH);
             DisplayTime = millis();
+#endif          
             i = response.indexOf("MINTEMP");
             if(i != -1) 
             { 
@@ -1812,7 +1737,7 @@ void DweetPost(void)
               float MinTemp = response.toFloat();
     
               // Validate new temperature
-              if(MinTemp < (Config.Celcius ? 5.0F : 50.0F) || MinTemp > (Config.Celcius ? 30.0F : 86.0F))
+              if(MinTemp < (Config.Celcius ? MinCelcius : MinFarenheit) || MinTemp > (Config.Celcius ? MaxCelcius : MaxFarenheit))
                 strcpy(googleText, "temp error");        
               else
               {
@@ -1824,13 +1749,13 @@ void DweetPost(void)
             }
   
             // Am I being ask to run the programmed schedule?
-            // This is in response to a "Ok Google, run $ thermostat schedule" command
+            // This is in response to a "Ok Google, run $ heating schedule" command
             i = response.indexOf("SCHEDULE");
             if(i != -1)
             {
               // Check if there's a schedule
               temp = RequestedTemp;
-              RequestedTemp = ScheduledTemp();
+              RequestedTemp = ScheduledTemp(0.0F);
               if(RequestedTemp != 0.0F)
               {
                 Schedule.Enabled = true;
@@ -1860,7 +1785,7 @@ void DweetPost(void)
       if(httpCode == HTTPC_ERROR_CONNECTION_REFUSED)
       {
 #ifdef BUILTIN_LED
-        digitalWrite(LED_BUILTIN, LOW);
+        digitalWrite(LED_BUILTIN, LED_OFF);
 #endif  
         http.setReuse(false);
         http.end();
@@ -1870,10 +1795,10 @@ void DweetPost(void)
     }
   }
   
-  // Now post current values reusing the connection already established
+  // Now post current values
   DweetFailed = true;
   UpTime(buf1);
-  postData = "/dweet/for/" + String(DWEETNAME);
+  postData = "http://dweet.io/dweet/for/" + String(DWEETNAME);
   postData += "?Location=" + String(Location[Config.DeviceLocation]);
   if(strlen(Config.CommonName) != 0) postData += "&CommonName=" + String(Config.CommonName);
   postData += "&Temperature=" + String(Last_T, 1);
@@ -1886,23 +1811,25 @@ void DweetPost(void)
   postData += "&kWh_Cost=" + String(Config.kWh_Cost) + String(" cents");
   postData += "&kWh_Used=" + String(Calc_kWh(Config.HeatingTime + (HeatOn ? (CurrentTime - HeatOnTime) / OneSecond : 0))) + " kWh";
   postData += "&Firmware=" + String(FIRMWARE);
+  postData += "&IP=" + WiFi.localIP().toString();
   postData += "&UpTime=" + String(buf1);  
-
+  
   // Replace any spaces in postData with '%20'
   postData.replace(" ", "%20");
   http.setReuse(false);
-  http.begin(String("dweet.io"), 80, postData);
+  http.setTimeout(10000);
+  http.begin(postData);
   httpCode = http.GET();
   if(httpCode == HTTP_CODE_OK) 
-    { response = http.getString(); DweetFailed = false; }
+    DweetFailed = false; 
   else
-    Serial.printf("[%s] Dweet post error = %d (%s)\n", getTime(false), httpCode, http.errorToString(httpCode).c_str());
-
+    Serial.printf("[%s] Dweet post error = %d\n", getTime(false), httpCode);
+  
   // End connection and save dweet time
   http.end();
   DweetTime = millis();
 #ifdef BUILTIN_LED
-  digitalWrite(LED_BUILTIN, LOW);
+  digitalWrite(LED_BUILTIN, LED_OFF);
 #endif  
 }
 
@@ -1915,10 +1842,7 @@ void GoogleCommand(AdafruitIO_Data *data)
   float   temp;
   String  MyLocation, ForLocation, CommonName, value;
 
-  // Turn backlight on and save initial values
-#ifndef OLED_Display
-  digitalWrite(BackLight, HIGH);
-#endif  
+  // Save initial values
   MyLocation = String(Location[Config.DeviceLocation]);
   MyLocation.toUpperCase();
   CommonName = String(Config.CommonName);
@@ -1952,27 +1876,29 @@ void GoogleCommand(AdafruitIO_Data *data)
   // Is this request for MyLocation or for all thermostats
   if((MyLocation == ForLocation || (ForLocation == "HOME" && Config.DeviceLocation < ExcludeLocation) || CommonName == ForLocation) && strcmp(Config.LastUpdated, getTime(false)) != 0)
   {
-    // Validate new temperature
     Serial.printf("[%s] MASTER = \"%s\"\n", getTime(false), value.c_str());
     CurrentTime = DisplayTime = millis();
     if(value.indexOf("SCHEDULE") != -1)
     {
       // I'm being asked to run the schedule.  Check if there's a valid temperature first...
       temp = RequestedTemp;
-      RequestedTemp = ScheduledTemp();
+      RequestedTemp = ScheduledTemp(0.0F);
       if(RequestedTemp != 0.0F)
       {
         // There was one
-        strcpy(Config.LastUpdated, getTime(false));
-        Config.CRC = Calc_CRC();                        
-        EEPROM.put(CONFIG_OFFSET, Config);
         Schedule.Enabled = true;
         EEPROM.put(SCHEDULE_OFFSET, Schedule);
         EEPROM.commit();        
 
         // Save new temp to feed
-        GoogleHome->save(RequestedTemp);
-      } else RequestedTemp = temp;
+        Serial.printf("[%s] Scheduled temperature now set to %s %c\n", getTime(false), String(RequestedTemp, 1).c_str(), (Config.Celcius ? 'C' : 'F'));
+        IO_Schedule->save("ON");
+      } 
+      else 
+      {
+        // There's no schedule
+        RequestedTemp = temp;
+      }
     }
     else
     {
@@ -1983,18 +1909,63 @@ void GoogleCommand(AdafruitIO_Data *data)
         // Save new temperature and disable scheduling
         sprintf(googleText, "-> %s <-", String(temp, 1).c_str());
         Config.MinTemp = RequestedTemp = temp;
-        strcpy(Config.LastUpdated, getTime(false));
-        Config.CRC = Calc_CRC();                        
-        EEPROM.put(CONFIG_OFFSET, Config);
         Schedule.Enabled = false;
         EEPROM.put(SCHEDULE_OFFSET, Schedule);
         EEPROM.commit();
+        if(ForLocation == "HOME") IO_Schedule->save("OFF");
       }
     }
 
     // Update display with new value
+    strcpy(Config.LastUpdated, getTime(false));
+    Config.CRC = Calc_CRC();                        
+    EEPROM.put(CONFIG_OFFSET, Config);
     UpdateTemperature();
   }
+}
+
+//
+// This function receives data from the Adafruit Schedule feed
+//
+void IOSchedule(AdafruitIO_Data *data)
+{
+  String  value;
+  float   temp;
+  
+  // Save initial value
+  value = data->value();
+  value.toUpperCase();
+
+  // Make sure this is a different message
+  if(strcmp(Config.LastUpdated, getTime(false)) == 0) return;
+  Serial.printf("[%s] SCHEDULE = \"%s\"\n", getTime(false), value.c_str());
+
+  // I'm being asked to run the schedule.  Check if there's a valid temperature first...
+  temp = RequestedTemp;
+  RequestedTemp = ScheduledTemp(0.0F);
+  if(RequestedTemp != 0.0F && value == "ON")
+  {
+    // There was one
+    Schedule.Enabled = true;
+    EEPROM.put(SCHEDULE_OFFSET, Schedule);
+    EEPROM.commit();        
+    Serial.printf("[%s] Scheduled temperature now set to %s %c\n", getTime(false), String(RequestedTemp, 1).c_str(), (Config.Celcius ? 'C' : 'F'));
+  } 
+  else 
+  {
+    // There's no schedule or value was "OFF"
+    RequestedTemp = Config.MinTemp;
+    Schedule.Enabled = false;
+    EEPROM.put(SCHEDULE_OFFSET, Schedule);
+    EEPROM.commit();        
+    Serial.printf("[%s] Temperature now set to %s %c\n", getTime(false), String(RequestedTemp, 1).c_str(), (Config.Celcius ? 'C' : 'F'));
+  }
+
+  // Update display with new value
+  strcpy(Config.LastUpdated, getTime(false));
+  Config.CRC = Calc_CRC();                        
+  EEPROM.put(CONFIG_OFFSET, Config);
+  UpdateTemperature();
 }
 
 //
@@ -2092,16 +2063,17 @@ bool findService(char *ScanName, int *Count)
 {
   bool  Found = false;
   int   cntr = 0;
-  char  buf[32];
+  char  buf[32], buf1[32];
 
   // Build name to search for on network
-  sprintf(buf, "Thermo-%s-OTA", ScanName);
+  sprintf(buf, "Thermo-%s", ScanName);
+  strcpy(buf1, "Thermo-OTA");
   
   // Do I need to start the mDNS service?
   if(ArduinoOTA.getHostname().length() == 0) 
   {
     Serial.print("Starting mDNS service... ");
-    if(!MDNS.begin(buf))
+    if(!MDNS.begin(buf1))
     {
      // Return TRUE as the code will think that I've found another device with the same location name
      Serial.println("Failed!");    
@@ -2113,18 +2085,23 @@ bool findService(char *ScanName, int *Count)
   }
 
   // Scan for devices that have Arduino OTA enabled
-  MDNS_Services = MDNS.queryService("arduino", "tcp");
-  if(MDNS_Services != 0) 
+  for(int j=0; j<3; j++)
   {
-    for(int i = 0; i < MDNS_Services; i++) 
+    delay(500);
+    MDNS_Services = MDNS.queryService("arduino", "tcp");
+    if(MDNS_Services != 0) 
     {
-      // Did I find a thermostat?
-      Serial.printf("  %d: %s (%s)\n", i+1, MDNS.hostname(i).c_str(), MDNS.IP(i).toString().c_str());
-      if(MDNS.hostname(i).indexOf("Thermo-") != -1) ++cntr;
-      if(strcmp(buf, MDNS.hostname(i).c_str()) == 0) Found = true;
-    }
+      for(int i = 0; i < MDNS_Services; i++) 
+      {
+        // Did I find a thermostat?
+        Serial.printf("  %d: %s (%s)\n", i+1, MDNS.hostname(i).c_str(), MDNS.IP(i).toString().c_str());
+        if(MDNS.hostname(i).indexOf("Thermo-") != -1) ++cntr;
+        if(MDNS.hostname(i).indexOf(buf) != -1) Found = true;
+      }
+    } 
+    if(MDNS_Services != 0) break; else Serial.printf("Scan %d, no services found...\n", j+1);
   }
-
+  
   // Return scan result
   *Count = cntr;
   return(Found);
@@ -2133,7 +2110,7 @@ bool findService(char *ScanName, int *Count)
 //
 // Get time from NTP time server 
 //
-bool getNTPTime(void) 
+time_t getNTPTime(void) 
 {
   const int NTP_PACKET_SIZE = 48;
   byte packetBuffer[ NTP_PACKET_SIZE];
@@ -2158,8 +2135,8 @@ bool getNTPTime(void)
 
   // Send UDP packet
   WiFiUDP Udp;
-  Udp.begin(2390);
-  Udp.beginPacket(timeServer, 123); // NTP requests are to port 123
+  if(!Udp.begin(2390)) { Serial.println("[getNTPTime] begin() failed!"); return(0); }
+  if(!Udp.beginPacket(timeServer, 123)) { Serial.println("[getNTPTime] beginPacket() failed!"); return(0); }
   Udp.write(packetBuffer, NTP_PACKET_SIZE);
   Udp.endPacket();
 
@@ -2176,12 +2153,12 @@ bool getNTPTime(void)
       // this is NTP time (seconds since Jan 1 1900):
       unsigned long secsSince1900 = highWord << 16 | lowWord;
 
-      // now convert NTP time into unix time
+      // Convert NTP time into unix time
       // Unix time starts on Jan 1 1970. In seconds, that's 2208988800L
-      // Then add timezone offset
-      unsigned long LocalTime = secsSince1900 - 2208988800UL + Config.TimeZone;
-      setTime(LocalTime);
-      return(true);
+      unsigned long UTC_Time = secsSince1900 - 2208988800UL;
+
+      // All done, set time and exit
+      return(myTZ.toLocal(UTC_Time));
     }
 
     // Wait a second
@@ -2189,7 +2166,7 @@ bool getNTPTime(void)
   }
 
   // Failed to receive time after 3 attemps
-  return(false);
+  return(0);
 }
 
 //
@@ -2232,7 +2209,7 @@ void ArduinoLogo(int Pause)
     display.drawLine((i/2)+4, h, (i/2)+12, h, BLACK); 
     display.drawLine((i/2)+8, h-4, (i/2)+8, h+4, BLACK); 
   #endif    
-  display.display();
+    display.display();
   if(Pause > 0) delay(Pause);
 }
 
@@ -2269,6 +2246,7 @@ void  ProcessClient(void)
   bool        Icon = false;
   bool        Post = false;
   bool        Reset = false;
+  bool        Conf = false;
   bool        NameError = false;
   bool        Scheduling = false;
   bool        isValid = false;
@@ -2281,12 +2259,6 @@ void  ProcessClient(void)
   if(!WebClient) return;
   
   // I have a client connecting
-#ifndef OLED_Display
-  digitalWrite(BackLight, HIGH);
-#endif  
-#ifdef BUILTIN_LED
-  digitalWrite(LED_BUILTIN, HIGH);
-#endif  
   DisplayTime = CurrentTime;
   strcpy(googleText, "WebClient");
   UpdateTemperature();
@@ -2308,10 +2280,10 @@ void  ProcessClient(void)
         if(Icon) { SendIcon(WebClient); break; }
 
         // Send the HTML header information and requested chart
-        if(Reset || Post) ChartType = CHART_NONE;
+        if(Reset || Conf || Post) ChartType = CHART_NONE;
         WebPageHead(WebClient, Location[Config.DeviceLocation], ChartType);
         WebClient.printf("<center><H3>Device = <a href=\"https://dweet.io/follow/Thermo-");
-        WebClient.printf("%s\">%s</a>", FusedMAC(), FusedMAC());            
+        WebClient.printf("%s\" target=\"_blank\">%s</a>", FusedMAC(), FusedMAC());            
         if(strcmp(Config.Master, FusedMAC()) == 0) WebClient.print(" / MASTER");
         WebClient.println("</H3></center>");
 
@@ -2371,7 +2343,7 @@ void  ProcessClient(void)
           if(isValid && Line.indexOf("ENABLED=") != -1) 
           {
             Schedule.Enabled = true; 
-            RequestedTemp = ScheduledTemp();
+            RequestedTemp = ScheduledTemp(Config.MinTemp);
           }
           else 
           {
@@ -2402,13 +2374,13 @@ void  ProcessClient(void)
           SendSchedule(WebClient, isValid);
           
         // Send page bottom info
-        WebClient.printf("<hr><center>%s / Firmware %s<br>", DEVICE, FIRMWARE);
+        WebClient.printf("<hr><center>%s / Firmware %s<br>", ARDUINO_VARIANT, FIRMWARE);
         WebClient.printf("Temperature %s %c, Humidity %s%%, Heating is %s<br>Requested %s %c, Scheduling is %s<br>", 
           String(Last_T, 1).c_str(), (Config.Celcius ? 'C' : 'F'), String(Last_H, 0).c_str(), (HeatOn ? "On" : "Off"),
           String(RequestedTemp, 1).c_str(), (Config.Celcius ? 'C' : 'F'), (Schedule.Enabled ? "enabled" : "disabled"));
 
         // Insert buttons for charts
-        if(!Reset)
+        if(!Reset && !Conf)
         {
           WebClient.println("<form id=\"form\" method=\"get\" enctype=\"application/x-www-form-urlencoded\" action=\"/\">");
           WebClient.println("<br><center><input name=\"TYPE\" type=\"radio\" checked value=\"0\">Temperature&nbsp<input name=\"TYPE\" type=\"radio\" value=\"1\">Cost&nbsp<input name=\"TYPE\" type=\"radio\" value=\"2\">kWh");
@@ -2419,8 +2391,13 @@ void  ProcessClient(void)
           if(!Scheduling) WebClient.println("<input type=\"button\" onclick=\"window.location.href='/Schedule'\" value=\"Schedule\">");
           WebClient.println("<script>function myFunction(Value) { window.location.href=Value + document.getElementById(\"form\").elements.namedItem(\"TYPE\").value; }</script>");
         }
-        if(Reset) 
-          WebClient.println("<hr><br><center><H1><font color=\"#FF0000\">Performing Factory Reset!<font color=\"#000000\"></H1></center>");
+        if(Reset || Conf) 
+        {
+          if(Reset) 
+            WebClient.println("<hr><br><center><H1><font color=\"#FF0000\">Performing Factory Reset!<font color=\"#000000\"></H1></center>");
+          else
+            WebClient.println("<hr><br><center><H1><font color=\"#FF0000\">Entering Configuration Mode!<font color=\"#000000\"></H1></center>");
+        }
         else          
           WebClient.println("<hr>Created by <a href=\"mailto:claudegbeaudoin@hotmail.com?Subject=Google Thermostat\">Claude G. Beaudoin</a></center>");
               
@@ -2453,6 +2430,7 @@ void  ProcessClient(void)
           if(Line.indexOf("/SCHEDULE") != -1) { ChartType = CHART_NONE; Scheduling = true; }
           if(Line.indexOf("/FAVICON.ICO") != -1) Icon = true;
           if(Line.indexOf("/FACTORY") != -1) Reset = true;
+          if(Line.indexOf("/CONFIG") != -1) Conf = true;
           if(Line.indexOf("/COMMON.NAME=") != -1)
           {
             // Change location Common Name.  Common Name can not be a location name
@@ -2467,7 +2445,7 @@ void  ProcessClient(void)
               EEPROM.commit();
             } 
           }
-#ifndef OLED_Display
+#ifdef BackLight
           if(Line.indexOf("/CONTRAST=") != -1)
           {
             // Extract value and validate it
@@ -2516,9 +2494,20 @@ void  ProcessClient(void)
     while(1);    
   }
 
-#ifdef BUILTIN_LED
-  digitalWrite(LED_BUILTIN, LOW);
-#endif  
+  // Am I reconfiguring?
+  if(Conf)
+  {
+    // Set SoftReboot to 10 and reboot
+    Serial.printf("[%s] Restarting into configuration...\n\n", getTime(false));
+    delay(2000);
+    Config.SoftReboot = 10;
+    Config.CRC = Calc_CRC();
+    EEPROM.put(CONFIG_OFFSET, Config);
+    EEPROM.commit();
+    WiFi.disconnect();
+    ESP.restart();
+    while(1);    
+  }
   strcpy(googleText, "");
   UpdateTemperature();  
 }
@@ -2579,7 +2568,7 @@ void  WebPageChart(WiFiClient WebClient, int ChartType)
   time_t  Today = now();
   
   // Build data based on the chart type
-  MaxDays = 21;       // You can change this up to 45 days.
+  MaxDays = 22;       // You can change this up to 45 days.
   ChartWidth = 800;   // Defines the chart width
   ChartHeight = 400;  // Defines the chart height
   Title = String(Location[Config.DeviceLocation]);
@@ -2748,7 +2737,6 @@ void  WebPageChart(WiFiClient WebClient, int ChartType)
       if(ChartType == MONTHLY_TEMP) { SubTitle += "Temperature"; yAxisUnit = (Config.Celcius ? "Celcius" : "Farenheit"); LeftAxisLabel = "% Humidity"; }
       if(ChartType == MONTHLY_COST) { SubTitle += "Heating Cost"; yAxisUnit = "$ $ $"; LeftAxisLabel = ""; DataSet1 = DataSet3; }
       if(ChartType == MONTHLY_KWH) { SubTitle += "kWh Consumption"; yAxisUnit = "kWh"; LeftAxisLabel = ""; DataSet1 = DataSet3; }
-      LeftAxisLabel = "% Humidity";
       Legend = "false";
       Set1Title = "Humidity";
       Set2Title = "Temperature";
@@ -2806,8 +2794,8 @@ void  WebPageChart(WiFiClient WebClient, int ChartType)
       return;
   }
 
-  // Make sure scale max is larger than scale min
-  if(ScaleMin == ScaleMax || ScaleMax - ScaleMin < 1.0F) ScaleMax += 1;
+  // Make sure min and max are not the same
+  if(String(ScaleMin, 2) == String(ScaleMax, 2)) ScaleMax += 0.5;
   
   // Fill in the chart data
   WebClient.printf("<center><canvas id=\"chart-01\" width=\"%d\" height=\"%d\" style=\"background-color:rgba(255,255,255,1.00);border-radius:5px;width:%dpx;height:%dpx;padding-left:0px;padding-right:0px;padding-top:0px;padding-bottom:0px\"></canvas>", ChartWidth, ChartHeight, ChartWidth, ChartHeight);
@@ -2854,7 +2842,7 @@ void  WebPageChart(WiFiClient WebClient, int ChartType)
   WebClient.println("percentageInnerCutout:50,scaleShowGridLines:true,scaleGridLineStyle:\"solid\",scaleGridLineWidth:1,scaleGridLineColor:\"rgba(140,145,6,0.13)\",scaleXGridLinesStep:1,");
   WebClient.println("scaleYGridLinesStep:0,segmentShowStroke:true,segmentStrokeStyle:\"solid\",segmentStrokeWidth:2,segmentStrokeColor:\"rgba(255,255,255,1.00)\",datasetStroke:true,datasetFill:false,");
   WebClient.println("datasetStrokeStyle:\"solid\",datasetStrokeWidth:3,bezierCurve:true,bezierCurveTension:0.4,pointDotStrokeStyle:\"solid\",pointDotStrokeWidth:2,pointDotRadius:5,pointDot:true,");
-  WebClient.printf("scaleTickSizeBottom:5,scaleTickSizeTop:5,scaleTickSizeLeft:5,scaleTickSizeRight:5,graphMin:%s,graphMax:%s,barShowStroke:false,barBorderRadius:0,barStrokeStyle:\"solid\",\n", String(ScaleMin, 1).c_str(), String(ScaleMax, 1).c_str());
+  WebClient.printf("scaleTickSizeBottom:5,scaleTickSizeTop:5,scaleTickSizeLeft:5,scaleTickSizeRight:5,graphMin:%s,graphMax:%s,barShowStroke:false,barBorderRadius:0,barStrokeStyle:\"solid\",\n", String(ScaleMin, 2).c_str(), String(ScaleMax, 2).c_str());
   WebClient.println("barStrokeWidth:1,barValueSpacing:15,barDatasetSpacing:0,scaleShowLabelBackdrop:true,scaleBackdropColor:'rgba(255,255,255,0.75)',scaleBackdropPaddingX:2,scaleBackdropPaddingY:2,");
   WebClient.println("animationEasing:'linear',animateRotate:true,animateScale:false,animationByDataset:true,animationLeftToRight:true,animationSteps:85,animation:true,");
   WebClient.println("onAnimationComplete:function(){ MoreChartOptions() }}; DrawTheChart(ChartData,ChartOptions,\"chart-01\",\"Bar\");</script></center>");  
@@ -2866,6 +2854,7 @@ void  WebPageChart(WiFiClient WebClient, int ChartType)
 void  SendSchedule(WiFiClient WebClient, bool isValid)
 {
   int     i, j, x;
+  bool    today;
   String  Title;
     
   Title = String(Location[Config.DeviceLocation]);
@@ -2874,7 +2863,12 @@ void  SendSchedule(WiFiClient WebClient, bool isValid)
   WebClient.printf("<center><h2><font color=\"#FF0000\">%s<font color=\"#000000\"></h2>", Title.c_str());
   WebClient.println("<form method=\"post\" enctype=\"application/x-www-form-urlencoded\" action=\"/\">");
   WebClient.println("<table border=\"1\"><tr><td></td>");
-  for(i=0; i<7; i++) WebClient.printf("<td align=\"center\" colspan=2>%s</td>", dayStr(i+1));
+  for(i=0; i<7; i++)
+  {
+    today = (weekday() == i+1);
+    WebClient.printf("<td align=\"center\" colspan=2><font color=\"%s\">%s%s&nbsp%s%s<font color=\"#000000\"></td>", 
+      (today ? "#0000FF" : "#000000"), (today ? "<b>" : ""), dayStr(i+1), (today ? getTime(true) : ""), (today ? "</b>" : ""));
+  }
   WebClient.println("</tr><td></td>");
   for(i=0; i<7; i++) WebClient.print("<td align=\"center\">Time</td><td align=\"center\">Temp</td>");
   WebClient.println("</tr>");
@@ -2905,9 +2899,9 @@ void  SendSchedule(WiFiClient WebClient, bool isValid)
 // 
 // Find requested temperature from schedule
 //
-float ScheduledTemp(void)
+float ScheduledTemp(float Default)
 {
-  float temp = Config.MinTemp;
+  float temp = Default;
   unsigned long Time1, Time2;
 
   // Set Time1 to current time
@@ -2955,6 +2949,7 @@ void  BroadcastSchedule(WiFiClient WebClient, String Line)
     if(MDNS.hostname(i).indexOf("Thermo-") != -1)
     {
       // Got one, post schedule
+      // TODO: Don't post to locations that are not in HOME location
       Serial.printf("[%s] Broadcasting to \"%s\"... ", getTime(false), MDNS.hostname(i).c_str());
       WebClient.printf("<center>Broadcasting to \"%s\"...&nbsp&nbsp", MDNS.hostname(i).c_str());
       postData = "http://" + MDNS.IP(i).toString() + "/Schedule";
@@ -2966,44 +2961,18 @@ void  BroadcastSchedule(WiFiClient WebClient, String Line)
       if(httpCode == HTTP_CODE_OK) 
       {
         Serial.println("OK!");
-        WebClient.print("OK!</center><br>");
+        WebClient.print("OK!</center>");
         ++Cntr;
       }
       else
       {
         Serial.printf("Failed! (%s)\n", http.errorToString(httpCode).c_str());
-        WebClient.printf("Failed! (%s)</center><br>", http.errorToString(httpCode).c_str());
+        WebClient.printf("Failed! (%s)</center>", http.errorToString(httpCode).c_str());
       }
       
       // Close connection
       http.end();
     }
-  }
-}
-
-//
-// Display the reset reason.  This is more for debugging.
-//
-void print_reset_reason(RESET_REASON reason)
-{
-  switch ( reason)
-  {
-    case 1 : Serial.println ("POWERON_RESET");break;          /**<1, Vbat power on reset*/
-    case 3 : Serial.println ("SW_RESET");break;               /**<3, Software reset digital core*/
-    case 4 : Serial.println ("OWDT_RESET");break;             /**<4, Legacy watch dog reset digital core*/
-    case 5 : Serial.println ("DEEPSLEEP_RESET");break;        /**<5, Deep Sleep reset digital core*/
-    case 6 : Serial.println ("SDIO_RESET");break;             /**<6, Reset by SLC module, reset digital core*/
-    case 7 : Serial.println ("TG0WDT_SYS_RESET");break;       /**<7, Timer Group0 Watch dog reset digital core*/
-    case 8 : Serial.println ("TG1WDT_SYS_RESET");break;       /**<8, Timer Group1 Watch dog reset digital core*/
-    case 9 : Serial.println ("RTCWDT_SYS_RESET");break;       /**<9, RTC Watch dog Reset digital core*/
-    case 10 : Serial.println ("INTRUSION_RESET");break;       /**<10, Instrusion tested to reset CPU*/
-    case 11 : Serial.println ("TGWDT_CPU_RESET");break;       /**<11, Time Group reset CPU*/
-    case 12 : Serial.println ("SW_CPU_RESET");break;          /**<12, Software reset CPU*/
-    case 13 : Serial.println ("RTCWDT_CPU_RESET");break;      /**<13, RTC Watch dog Reset CPU*/
-    case 14 : Serial.println ("EXT_CPU_RESET");break;         /**<14, for APP CPU, reseted by PRO CPU*/
-    case 15 : Serial.println ("RTCWDT_BROWN_OUT_RESET");break;/**<15, Reset when the vdd voltage is not stable*/
-    case 16 : Serial.println ("RTCWDT_RTC_RESET");break;      /**<16, RTC Watch dog reset digital core and rtc module*/
-    default : Serial.println ("NO_MEAN");
   }
 }
 
